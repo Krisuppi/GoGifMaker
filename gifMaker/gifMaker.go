@@ -1,15 +1,15 @@
 package main
 
 import (
-    "fmt"
-    "os"
-    "log"
-	"strings"
+	"bufio"
+	"cmp"
+	"fmt"
+	"io/fs"
+	"log"
+	"os"
 	"os/exec"
 	"slices"
-	"cmp"
-	"io/fs"
-	"bufio"
+	"strings"
 )
 
 func main() {
@@ -17,35 +17,35 @@ func main() {
 	config, err := os.Open("config.txt")
 	if err == nil {
 		defer config.Close()
- 		scanner := bufio.NewScanner(config)
+		scanner := bufio.NewScanner(config)
 		scanner.Scan()
-	    filetype = strings.Trim(scanner.Text(), " ")
+		filetype = strings.Trim(scanner.Text(), " ")
 		fmt.Println("config found. selecting for file type '" + filetype + "' for gif generation")
 	} else {
 		fmt.Println("config not found or unable to open. using default .png for gif generation")
 	}
-    entries, err := os.ReadDir("./")
-    if err != nil {
-        log.Fatal(err)
-    } else {
+	entries, err := os.ReadDir("./")
+	if err != nil {
+		log.Fatal(err)
+	} else {
 		slices.SortFunc(entries, func(a, b fs.DirEntry) int {
 			return cmp.Compare(strings.ToLower(a.Name()), strings.ToLower(b.Name()))
 		})
 	}
 	var nameMap = make(map[string]string)
-    for i, e := range entries {
-    	curName := e.Name()
-		if (strings.HasSuffix(curName, filetype)) {
+	for i, e := range entries {
+		curName := e.Name()
+		if strings.HasSuffix(curName, filetype) {
 			newName := fmt.Sprintf("%06d", i) + filetype
 			nameMap[newName] = curName
 			os.Rename(curName, newName)
 		}
-    }
-	if (len(nameMap) == 0) {
-	fmt.Println("no files with type '" + filetype + "' found. Exiting")
+	}
+	if len(nameMap) == 0 {
+		fmt.Println("no files with type '" + filetype + "' found. Exiting")
 		return
 	}
-	cmdString := "ffmpeg -i %6d" + filetype +" output.gif -y"
+	cmdString := "ffmpeg -i %6d" + filetype + " output.gif -y"
 	parts := strings.Fields(cmdString)
 	cmd := exec.Command(parts[0], parts[1:]...)
 	outStdAndErr, err := cmd.CombinedOutput()
