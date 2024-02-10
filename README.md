@@ -6,7 +6,17 @@
 - Enjoy gif
 
 # Configure
+- Default values: .png files, 30fps, shows log
+- Edit by creating config.txt in same folder as the app
+- 1st line defines filetype with dot at start e.g ".png"
+- 2nd line defines fps
+- 3rd line defines debug mode if any text but whitespace is set
 
-- By default searched for files ending with .png to generate gif from
-- if pics are in other format then make config.txt and enter the desired file-ending on 1st line
-- todo specify fps on 2nd line
+# How it works
+- ffmpeg is a wonderful tool but defining input range for gifs or videos can be a pain when files are not named in a specific pattern.
+- This app temporarily renames all files in folder matching filetype and runs ffmpeg on them. Then renames them back. Sets the ordering for gif with default cmp.Compare ignoring case sensitivity.
+
+# TODOs
+- inspect case sensitivity when renaming files
+- maybe mp4 if waifu wants
+- sanitize input in case this gets on a server
