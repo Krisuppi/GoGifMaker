@@ -17,6 +17,5 @@
 - This app temporarily renames all files in folder matching filetype and runs ffmpeg on them. Then renames them back. Sets the ordering for gif with default cmp.Compare ignoring case sensitivity.
 
 # TODOs
-- inspect case sensitivity when renaming files
 - maybe mp4 if waifu wants
 - sanitize input in case this gets on a server
