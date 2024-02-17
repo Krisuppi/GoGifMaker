@@ -14,48 +14,33 @@ import (
 
 func main() {
 	filetype, fps, dlog := setConfig()
-	nameMap := handleInputFiles(filetype, dlog)
+	tileName := "tile.png"
+	paletteName := "palette.png"
+	tileCmd, paletteCmd, gifCmd := genCmds(filetype, fps, dlog, tileName, paletteName)
 
+	nameMap := handleInputFiles(filetype, dlog)
 	if len(nameMap) == 0 {
 		prln("no files with type '"+filetype+"' found. Exiting", dlog)
 		return
 		// todo validate sizes
 	}
-	tileName, errTile := genGlobalTile(filetype, dlog)
+
+	errTile := runCmd(tileCmd, dlog)
 	if errTile != nil {
-		prln(errTile.Error(), dlog)
 		nameBack(&nameMap)
 		os.Exit(1)
 	}
-
-	paletteName, errPalette := genPalette(filetype, tileName, dlog)
+	errPalette := runCmd(paletteCmd, dlog)
 	if errPalette == nil {
-		errGif := genGif(filetype, paletteName, fps, dlog)
-		if errGif != nil {
+		errGif := runCmd(gifCmd, dlog)
+		if errGif == nil {
 			prln("output.gif generated", dlog)
-		} else {
-			prln(errGif.Error(), dlog)
 		}
 	}
 
-	// Clean up. reverse rename of nameMap and delete tmp and palette files
 	nameBack(&nameMap)
-	if errTile == nil {
-		e := os.Remove(tileName)
-		if  e != nil {
-			prln("failed to delete temp file for tile. File can be deleted manually " + tileName, dlog)
-		} else {
-			prln("tmp tile file deleted successfully " + tileName, dlog)
-		}
-	}
-	if errPalette == nil {
-		e := os.Remove(paletteName)
-		if e != nil {
-			prln("failed to delete palette file. File can be deleted manually " + paletteName, dlog)
-		} else {
-			prln("tmp palette file deleted successfully " + paletteName, dlog)	
-		}
-	}
+	delTmpFile(tileName, errTile, dlog)
+	delTmpFile(paletteName, errPalette, dlog)
 	if dlog {
 		prln("Press Enter to exit", dlog)
 		scanner := bufio.NewScanner(os.Stdin)
@@ -64,9 +49,19 @@ func main() {
 	}
 }
 
-func genGlobalTile(filetype string, dlog bool) (string, error) {
-	tileName := "tmp.png"
-	parts := []string{
+func delTmpFile(name string, genError error, dlog bool) {
+	if genError == nil {
+		e := os.Remove(name)
+		if  e != nil {
+			prln("failed to delete temp file. File can be deleted manually " + name, dlog)
+		} else {
+			prln("tmp file " + name + " deleted successfully", dlog)
+		}
+	}
+}
+
+func genCmds(filetype string, fps string, dlog bool, tileName string, paletteName string) ([]string, []string, []string) {
+	tileCmd := []string{
 		"ffmpeg",
 		"-y",
 		"-hide_banner",
@@ -78,18 +73,7 @@ func genGlobalTile(filetype string, dlog bool) (string, error) {
 		"1",
 		tileName,
 	}
-	prln("part 1. create tile: " + strings.Join(parts[:], " "), dlog)
-	cmd := exec.Command(parts[0], parts[1:]...)
-	outStdAndErr, err := cmd.CombinedOutput()
-	if (err != nil && dlog) {
-		fmt.Println(string(outStdAndErr))
-	}
-	return tileName, err
-}
-
-func genPalette(filetype string, tileName string, dlog bool) (string, error) {
-	palName := "palette.png"
-	parts := []string{
+	paletteCmd := []string{
 		"ffmpeg",
 		"-y",
 		"-hide_banner",
@@ -97,19 +81,12 @@ func genPalette(filetype string, tileName string, dlog bool) (string, error) {
 		tileName,
 		"-vf",
 		"palettegen=max_colors=64:reserve_transparent=1:stats_mode=single",
-		palName,
+		paletteName,
 	}
-	prln("part 2. create palette: " + strings.Join(parts[:], " "), dlog)
-	cmd := exec.Command(parts[0], parts[1:]...)
-	err := cmd.Run()
-	return palName, err
-}
-
-func genGif(filetype string, paletteName string, fps string, dlog bool) error {
-	parts := []string{
+	gifCmd := []string{
 		"ffmpeg",
 		"-y",
-		"hide_banner",
+		"-hide_banner",
 		"-framerate",
 		fps,
 		"-i",
@@ -120,9 +97,17 @@ func genGif(filetype string, paletteName string, fps string, dlog bool) error {
 		"split[s0][s1]; [s0]palettegen= max_colors=256: stats_mode=single: reserve_transparent=on: transparency_color=ffffff[p]; [s1][p]paletteuse=new=1",
 		"output.gif",
 	}
-	prln("part 3. create Gif: " + strings.Join(parts[:], " "), dlog)
+	return tileCmd, paletteCmd, gifCmd
+}
+
+func runCmd(parts []string, dlog bool) error {
+	prln(strings.Join(parts[:], " "), dlog)
 	cmd := exec.Command(parts[0], parts[1:]...)
-	return cmd.Run()
+	stdAndErr, err := cmd.CombinedOutput()
+	if (err != nil && dlog) {
+		fmt.Println(string(stdAndErr))
+	}
+	return err
 }
 
 func setConfig() (string, string, bool) {
@@ -166,17 +151,17 @@ func setConfig() (string, string, bool) {
 }
 
 func handleInputFiles(filetype string, dlog bool) map[string]string {
+	var nameMap = make(map[string]string)
 	entries, err := os.ReadDir("./")
 	if err != nil {
 		prln(err.Error(), dlog)
-		os.Exit(1)
+		return nameMap
 	} else {
 		slices.SortFunc(entries, func(a, b fs.DirEntry) int {
 			return cmp.Compare(strings.ToLower(a.Name()), strings.ToLower(b.Name()))
 		})
 	}
 
-	var nameMap = make(map[string]string)
 	i := 0
 	for _, e := range entries {
 		curName := e.Name()
@@ -187,11 +172,7 @@ func handleInputFiles(filetype string, dlog bool) map[string]string {
 			os.Rename(curName, newName)
 		}
 	}
-
-	if dlog {
-		fmt.Print("Found files to convert into gif. Renaming them temporarily: ")
-		fmt.Println(&nameMap)
-	}
+	prln("Found files to convert into gif. Renaming them temporarily " + fmt.Sprint(nameMap), dlog)
 	return nameMap
 }
 
