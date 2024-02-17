@@ -10,6 +10,9 @@ import (
 	"slices"
 	"strings"
 	"regexp"
+	"image"
+	_ "image/png"
+	_ "image/jpeg"
 )
 
 func main() {
@@ -22,7 +25,6 @@ func main() {
 	if len(nameMap) == 0 {
 		prln("no files with type '"+filetype+"' found. Exiting", dlog)
 		return
-		// todo validate sizes
 	}
 
 	errTile := runCmd(tileCmd, dlog)
@@ -152,28 +154,60 @@ func setConfig() (string, string, bool) {
 
 func handleInputFiles(filetype string, dlog bool) map[string]string {
 	var nameMap = make(map[string]string)
-	entries, err := os.ReadDir("./")
+	fullList, err := os.ReadDir("./")
+	
 	if err != nil {
 		prln(err.Error(), dlog)
 		return nameMap
 	} else {
-		slices.SortFunc(entries, func(a, b fs.DirEntry) int {
-			return cmp.Compare(strings.ToLower(a.Name()), strings.ToLower(b.Name()))
-		})
-	}
+		entries := validateFiles(fullList, filetype, dlog)
+		slices.SortFunc(entries, func(a, b string) int {
+			return cmp.Compare(strings.ToLower(a), strings.ToLower(b))
+		})	
 
-	i := 0
-	for _, e := range entries {
-		curName := e.Name()
-		if strings.HasSuffix(strings.ToLower(curName), filetype) {
-			i++
+		for i, curName := range entries {
 			newName := fmt.Sprintf("%06d.", i) + filetype
 			nameMap[newName] = curName
 			os.Rename(curName, newName)
 		}
+		prln("Found files to convert into gif. Renaming them temporarily " + fmt.Sprint(nameMap), dlog)
+		return nameMap
 	}
-	prln("Found files to convert into gif. Renaming them temporarily " + fmt.Sprint(nameMap), dlog)
-	return nameMap
+}
+
+func validateFiles(input []fs.DirEntry, filetype string, dlog bool) []string {
+	toConvert := make([]string, 0, len(input))
+	var width int
+	var height int
+	var firstImg string
+
+	for _, e := range input {
+		curName := e.Name()
+		if strings.HasSuffix(strings.ToLower(curName), filetype) {
+			reader, errOpen := os.Open(curName)
+			if errOpen == nil {
+				defer reader.Close()
+				m, _, errImg := image.Decode(reader)
+				if errImg != nil {
+					prln(errImg.Error(), dlog)
+					prln("failed decode image of file " + curName + " skipping it from conversion", dlog)
+				} else {
+					bounds := m.Bounds()
+					if firstImg == "" {
+						width = bounds.Dx()
+						height = bounds.Dy()
+						firstImg = curName
+					} else if width != bounds.Dx() || height != bounds.Dy()  {
+						prln("Output might look unexpected because all files do not match in size. Difference in size with " + firstImg + " and " + curName, dlog)
+					}
+					toConvert = append(toConvert, curName)
+				}
+			} else {
+				prln("failed to open file " + curName + " skipping it from conversion", dlog)
+			}
+		}
+	}
+	return toConvert
 }
 
 func nameBack(nameMap *map[string]string) {
