@@ -8,3 +8,4 @@
 *.avi
 *.mp4
 config.txt
+build/*
